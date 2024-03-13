@@ -48,26 +48,43 @@ exports.getStudentDetails = functions.https.onRequest((req,res) => {
 })
 // onWrite used for all document changes
 // onCreate
-exports.AddSummaryChange = functions.firestore.document('summary/{summaryId}').onCreate((change,context) => {
+exports.AddSummaryChange = functions.firestore.document('summary/{summaryId}').onWrite((change,context) => {
     const refSummary = firestore.collection('summary');
-    return refSummary.get().then(snapshot => {
+    return refSummary.get().then(stu => {
         let totalStudents = 0;
         let totalMarks  = 0;
+        let studentRank = [];
 
-        snapshot.forEach(doc => {
+        stu.forEach(doc => {
             const studentData = doc.data();
             if(studentData.totalMark){
                 totalStudents++;
                 totalMarks += studentData.totalMark;
+                studentRank.push({id:doc.id,...studentData});
             }
+            })
 
-        })
+        studentRank.forEach(docStu => {
+            let rank = 1;
+            studentRank.forEach(remaininStu => {
+                if(remaininStu.totalMark > docStu.totalMark){
+                    rank++;
+                }
+            })
+           refSummary.doc(docStu.name).update({rank: rank});
+            })   
+        let firstRank = "";
+        studentRank.forEach(docStu => {
+            if(docStu.rank == 1){
+                firstRank = docStu.name;
 
+            }
+        })    
         const averageMark = totalStudents > 0 ? totalMarks / totalStudents : 0
-
         return refSummary.doc('summary-info').set({
             totalStudents: totalStudents,
-            averageMark: parseFloat(averageMark.toFixed(1))
+            averageMark: parseFloat(averageMark.toFixed(1)),
+            firstRank:firstRank,
         },{merge: true})
     }).catch(err => {
         console.log(err)
@@ -128,7 +145,7 @@ exports.updateDataInDocuments = functions.firestore.document('summary/{summaryId
         const studentData = doc.data();
         if(studentData.totalMark){
             totalStudents++;
-            totalMarks = studentData.totalMark
+            totalMarks += studentData.totalMark
         }
     })
 
@@ -136,7 +153,8 @@ exports.updateDataInDocuments = functions.firestore.document('summary/{summaryId
     return refSummary.doc('summary-info')
     .set({
         totalStudents: totalStudents,
-        averageMark: parseFloat(averageMark.toFixed(2))
+        averageMark: parseFloat(averageMark.toFixed(2)),
+        
     },{merge: true})
   })
   .then(() => {
